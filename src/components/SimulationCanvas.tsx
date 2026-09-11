@@ -12,6 +12,7 @@ export const SimulationCanvas: React.FC = () => {
   const requestRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [showTelemetry, setShowTelemetry] = useState(true);
 
   const {
     hardware,
@@ -349,6 +350,20 @@ export const SimulationCanvas: React.FC = () => {
             График
           </button>
 
+          {/* Telemetry info bar toggle button */}
+          <button
+            onClick={() => setShowTelemetry(!showTelemetry)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg font-semibold text-xs transition cursor-pointer shadow-xs ${
+              showTelemetry
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Показать / скрыть панель телеметрии (скорость, круг, ШИМ)"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            Инфо
+          </button>
+
           {/* Start Robot Button */}
           <button 
             onClick={handleToggleSim}
@@ -377,8 +392,59 @@ export const SimulationCanvas: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Non-overlapping Telemetry Bar (Clean view of track!) */}
+      {showTelemetry && (
+        <div className="mb-2 py-1.5 px-3 bg-slate-900 text-white rounded-lg flex items-center justify-between gap-3 text-xs font-mono shrink-0 shadow-sm border border-slate-800 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
+              <Gauge className="w-3.5 h-3.5 text-blue-400" />
+              {speedKmh.toFixed(1)} км/ч
+              <span className="text-[10px] text-slate-400 font-normal">({simState.linearVelocity.toFixed(2)} м/с)</span>
+            </span>
+
+            <span className="text-slate-600">|</span>
+
+            <span className="flex items-center gap-1.5 text-slate-300">
+              <span>ШИМ:</span>
+              <span className={simState.leftMotorSpeed >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                {(simState.leftMotorSpeed * 100).toFixed(0)}%
+              </span>
+              <span className="text-slate-500">/</span>
+              <span className={simState.rightMotorSpeed >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                {(simState.rightMotorSpeed * 100).toFixed(0)}%
+              </span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 text-amber-300">
+              <span>⏱️ Круг:</span>
+              <span className="font-bold">{simState.currentLapTime.toFixed(2)}с</span>
+              <span className="text-[10px] text-slate-400">(№{simState.lapCount})</span>
+            </span>
+
+            <span className="text-slate-600">|</span>
+
+            <span className="flex items-center gap-1 text-yellow-300">
+              <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+              <span>Рекорд:</span>
+              <span className="font-bold">{simState.bestLapTime ? `${simState.bestLapTime.toFixed(2)}с` : '—'}</span>
+            </span>
+
+            <span className="text-slate-600">|</span>
+
+            <span className="flex items-center gap-1">
+              <span className="text-slate-400">Линия:</span>
+              <span className={simState.onLinePercentage > 85 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                {simState.onLinePercentage}%
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
       
-      {/* Simulation Arena Box */}
+      {/* Simulation Arena Box (100% clean view of the track!) */}
       <div className="flex-1 relative rounded-xl border border-slate-300/80 shadow-inner bg-slate-200/80 overflow-hidden flex items-center justify-center p-2">
         <canvas 
           ref={trackCanvasRef}
@@ -396,74 +462,6 @@ export const SimulationCanvas: React.FC = () => {
           className="bg-white shadow-xl rounded-lg cursor-crosshair border border-slate-200"
           style={{ width: `${trackSettings.width}px`, height: `${trackSettings.height}px`, maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
         />
-        
-        {/* Real-time Telemetry & Lap Timing HUD */}
-        <div className="absolute top-4 left-4 bg-slate-900/85 backdrop-blur-md text-white p-3 rounded-xl text-xs font-mono shadow-xl border border-slate-700/60 min-w-[210px] space-y-2">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
-            <span className="text-slate-400 text-[10px] uppercase tracking-wider font-bold flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5 text-blue-400" />
-              Телеметрия заезда
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
-              Кругов: {simState.lapCount}
-            </span>
-          </div>
-
-          {/* Speed & Dynamics */}
-          <div className="space-y-1">
-            <div className="flex justify-between items-baseline">
-              <span className="text-slate-400 text-[11px]">Скорость:</span>
-              <span className="text-base font-bold text-cyan-300">
-                {speedKmh.toFixed(1)} <span className="text-[10px] text-slate-400">км/ч</span>
-                <span className="text-xs text-slate-400 font-normal ml-1">({simState.linearVelocity.toFixed(2)} м/с)</span>
-              </span>
-            </div>
-
-            <div className="flex justify-between text-[11px]">
-              <span className="text-slate-400">ШИМ L / R:</span>
-              <span className="font-semibold text-slate-200">
-                <span className={simState.leftMotorSpeed >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                  {(simState.leftMotorSpeed * 100).toFixed(0)}%
-                </span>
-                {' / '}
-                <span className={simState.rightMotorSpeed >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                  {(simState.rightMotorSpeed * 100).toFixed(0)}%
-                </span>
-              </span>
-            </div>
-          </div>
-
-          {/* Lap Times */}
-          <div className="border-t border-slate-800 pt-1.5 space-y-1">
-            <div className="flex justify-between items-center text-[11px]">
-              <span className="text-slate-400 flex items-center gap-1">
-                ⏱️ Текущий круг:
-              </span>
-              <span className="font-bold text-amber-300">
-                {simState.currentLapTime.toFixed(2)} с
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center text-[11px]">
-              <span className="text-slate-400 flex items-center gap-1">
-                <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-                Лучший круг:
-              </span>
-              <span className="font-bold text-yellow-300">
-                {simState.bestLapTime ? `${simState.bestLapTime.toFixed(2)} с` : '—'}
-              </span>
-            </div>
-          </div>
-
-          {/* Quality metric */}
-          <div className="border-t border-slate-800 pt-1 flex justify-between text-[10px] text-slate-400">
-            <span>Удержание линии:</span>
-            <span className={simState.onLinePercentage > 85 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
-              {simState.onLinePercentage}%
-            </span>
-          </div>
-        </div>
 
         {/* Lap record toast notification */}
         {simState.newRecordAlert && (
@@ -472,7 +470,6 @@ export const SimulationCanvas: React.FC = () => {
             НОВЫЙ РЕКОРД КРУГА: {simState.bestLapTime?.toFixed(2)} сек!
           </div>
         )}
-
       </div>
 
       {/* Real-time Optical Sensor Bar Monitor */}
