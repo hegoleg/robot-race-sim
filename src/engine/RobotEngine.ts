@@ -1,8 +1,13 @@
-import type { RobotSettings, TrackSettings, SimulationState } from '../store/useStore';
+import type { RobotHardwareConfig, TrackSettings, SimulationState } from '../store/useStore';
+import { arduinoEnv } from './ArduinoTranspiler';
+
+export const PIXELS_PER_METER = 700; // 700 px = 1 meter (~1.43 px per mm)
 
 export class RobotEngine {
   private trackCtx: CanvasRenderingContext2D | null = null;
   public trackImageData: ImageData | null = null;
+  private lastLapCrossTime: number = 0;
+  private crossedStartGate: boolean = false;
 
   constructor() {}
 
@@ -11,20 +16,23 @@ export class RobotEngine {
     this.trackImageData = ctx.getImageData(0, 0, width, height);
   }
 
-  // Draw a basic track
   drawTrack(ctx: CanvasRenderingContext2D, trackSettings: TrackSettings) {
     const { width, height, lineWidth, type } = trackSettings;
-    
+    const linePx = Math.round(lineWidth * (PIXELS_PER_METER / 1000));
+
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = lineWidth;
+    // Draw checkered Start/Finish line
+    this.drawStartFinishGate(ctx, type, width, height, linePx);
+
+    // Draw main black track line
+    ctx.strokeStyle = '#0a0a0a';
+    ctx.lineWidth = Math.max(12, linePx);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     ctx.beginPath();
-    
     if (type === 'infinity') {
       ctx.ellipse(width / 2, height / 2, width * 0.35, height * 0.35, 0, 0, 2 * Math.PI);
       ctx.stroke();
@@ -45,35 +53,68 @@ export class RobotEngine {
       ctx.closePath();
       ctx.stroke();
     }
-    
+
     this.setTrackContext(ctx, width, height);
   }
 
-  readSensors(state: SimulationState, settings: RobotSettings): number[] {
-    if (!this.trackImageData) return Array(settings.sensorCount).fill(0);
+  private drawStartFinishGate(
+    ctx: CanvasRenderingContext2D,
+    type: 'infinity' | 'oval' | 'sharp',
+    width: number,
+    height: number,
+    linePx: number
+  ) {
+    let gateX = width / 2;
+    let gateY = height / 2 - height * 0.35;
+
+    if (type === 'oval') {
+      gateY = height / 2 - height * 0.3;
+    } else if (type === 'sharp') {
+      gateX = width * 0.35;
+      gateY = height * 0.2;
+    }
+
+    // Draw red/white finish checker banner
+    ctx.save();
+    ctx.translate(gateX, gateY);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(-3, -linePx - 8, 6, (linePx + 8) * 2);
+    ctx.fillStyle = '#ffffff';
+    for (let y = -linePx - 6; y < linePx + 6; y += 6) {
+      ctx.fillRect(-2, y, 4, 3);
+    }
+    ctx.restore();
+  }
+
+  readSensors(state: SimulationState, hardware: RobotHardwareConfig): number[] {
+    if (!this.trackImageData) return Array(hardware.sensorCount).fill(0);
 
     const sensors: number[] = [];
-    const count = settings.sensorCount;
-    const spacing = settings.sensorSpacing;
-    const dist = settings.sensorDistance;
+    const count = hardware.sensorCount;
+    const spacingPx = hardware.sensorSpacing * (PIXELS_PER_METER / 1000);
+    const distPx = hardware.sensorDistance * (PIXELS_PER_METER / 1000);
 
-    const totalWidth = (count - 1) * spacing;
-    const startOffset = -totalWidth / 2;
+    const totalWidthPx = (count - 1) * spacingPx;
+    const startOffsetPx = -totalWidthPx / 2;
 
     const width = this.trackImageData.width;
     const height = this.trackImageData.height;
     const data = this.trackImageData.data;
 
+    // Height attenuation factor (ideal height is 3-5mm)
+    const heightFactor = Math.max(0.3, Math.min(1.0, 1.0 - Math.abs(hardware.sensorHeight - 4) * 0.12));
+
     for (let i = 0; i < count; i++) {
-      const latOffset = startOffset + i * spacing;
+      const latOffset = startOffsetPx + i * spacingPx;
       
-      const sX = Math.round(state.robotX + Math.cos(state.robotAngle) * dist - Math.sin(state.robotAngle) * latOffset);
-      const sY = Math.round(state.robotY + Math.sin(state.robotAngle) * dist + Math.cos(state.robotAngle) * latOffset);
+      const sX = Math.round(state.robotX + Math.cos(state.robotAngle) * distPx - Math.sin(state.robotAngle) * latOffset);
+      const sY = Math.round(state.robotY + Math.sin(state.robotAngle) * distPx + Math.cos(state.robotAngle) * latOffset);
 
       if (sX >= 0 && sX < width && sY >= 0 && sY < height) {
         const index = (sY * width + sX) * 4;
         const brightness = (data[index] + data[index + 1] + data[index + 2]) / 3;
-        sensors.push(1 - (brightness / 255));
+        const raw = 1 - (brightness / 255);
+        sensors.push(Math.max(0, Math.min(1, raw * heightFactor)));
       } else {
         sensors.push(0);
       }
@@ -83,46 +124,126 @@ export class RobotEngine {
 
   update(
     state: SimulationState,
-    settings: RobotSettings,
+    hardware: RobotHardwareConfig,
     userCode: string,
     dt: number
   ): SimulationState {
-    const sensors = this.readSensors(state, settings);
-    
-    let leftSpeed = 0;
-    let rightSpeed = 0;
+    // 1. Compile/prepare Arduino C++ environment
+    arduinoEnv.compile(userCode, hardware.sensorCount);
 
-    try {
-      const userFunc = new Function('sensors', 'dt', userCode + '\nreturn loop(sensors, dt);');
-      const result = userFunc(sensors, dt);
-      
-      if (result && typeof result.leftSpeed === 'number' && typeof result.rightSpeed === 'number') {
-        leftSpeed = Math.max(-1, Math.min(1, result.leftSpeed));
-        rightSpeed = Math.max(-1, Math.min(1, result.rightSpeed));
-      }
-    } catch {
-      // ignore syntax or runtime errors during user editing
+    // 2. Read sensor array
+    const sensors = this.readSensors(state, hardware);
+
+    // 3. Execute Arduino loop()
+    const { leftSpeed, rightSpeed } = arduinoEnv.executeTick(sensors, state.time, dt);
+
+    // 4. Physical powertrain model:
+    // Voltage scaling and motor efficiency
+    const voltageRatio = Math.max(0.5, Math.min(2.0, hardware.batteryVoltage / hardware.nominalVoltage));
+    const effectiveRPM = hardware.motorRPM * voltageRatio * hardware.driverEfficiency;
+    
+    // Top linear speed (m/s)
+    const maxWheelSpeedMps = (2 * Math.PI * (hardware.wheelRadius / 1000) * effectiveRPM) / 60;
+    
+    // Target speeds in m/s
+    const targetVL = leftSpeed * maxWheelSpeedMps;
+    const targetVR = rightSpeed * maxWheelSpeedMps;
+
+    // Weight and grip influence acceleration (motor torque limit & traction)
+    const massKg = Math.max(0.05, hardware.weight / 1000);
+    const tractionCoeff = hardware.tireGrip * (1 + (hardware.wheelWidth - 10) * 0.02);
+    const maxAccel = Math.min(25, (9.81 * tractionCoeff) / (massKg * 2.5)); // m/s^2
+
+    // Inertial smoothing for wheel speed transitions
+    const accelStep = maxAccel * dt;
+    const currentVL = state.linearVelocity - (state.angularVelocity * (hardware.wheelbase / 2000));
+    const currentVR = state.linearVelocity + (state.angularVelocity * (hardware.wheelbase / 2000));
+
+    const vL = currentVL + Math.max(-accelStep, Math.min(accelStep, targetVL - currentVL));
+    const vR = currentVR + Math.max(-accelStep, Math.min(accelStep, targetVR - currentVR));
+
+    // Linear velocity & angular velocity
+    let linearVel = (vL + vR) / 2;
+    const wheelbaseM = hardware.wheelbase / 1000;
+    let angularVel = (vL - vR) / wheelbaseM;
+
+    // 5. Lateral tire slip (занос при резких поворотах):
+    // Centrifugal acceleration ac = v^2 / R = v * omega
+    const centrifugalAccel = Math.abs(linearVel * angularVel);
+    const lateralGripLimit = 9.81 * tractionCoeff;
+    let slipDriftAngle = 0;
+
+    if (centrifugalAccel > lateralGripLimit) {
+      // Robot slips outward!
+      const slipRatio = Math.min(0.5, (centrifugalAccel - lateralGripLimit) / lateralGripLimit);
+      linearVel *= (1 - slipRatio * 0.4); // speed scrubbed due to sliding
+      angularVel *= (1 - slipRatio * 0.6); // understeer
+      slipDriftAngle = Math.sign(angularVel) * -slipRatio * 0.2;
     }
 
-    const vL = leftSpeed * settings.maxSpeed;
-    const vR = rightSpeed * settings.maxSpeed;
-    
-    const v = (vL + vR) / 2;
-    // Positive omega means clockwise rotation (turning right, where left wheel moves faster)
-    const omega = (vL - vR) / settings.wheelbase;
+    // 6. Integrate position
+    const moveAngle = state.robotAngle + slipDriftAngle;
+    const newAngle = state.robotAngle + angularVel * dt;
+    const linearDistM = linearVel * dt;
+    const linearDistPx = linearDistM * PIXELS_PER_METER;
 
-    const newAngle = state.robotAngle + omega * dt;
-    const newX = state.robotX + v * Math.cos(newAngle) * dt;
-    const newY = state.robotY + v * Math.sin(newAngle) * dt;
+    const newX = state.robotX + linearDistPx * Math.cos(moveAngle);
+    const newY = state.robotY + linearDistPx * Math.sin(moveAngle);
+
+    // 7. Track analytics & Lap timer
+    const hasLine = sensors.some(s => s > 0.35);
+    const offTrackCount = state.offTrackCount + (hasLine ? 0 : (state.time > 1 && Math.random() < 0.05 ? 1 : 0));
+    const onLinePercentage = Math.round(state.onLinePercentage * 0.99 + (hasLine ? 1 : 0) * 100 * 0.01);
+
+    // Lap gate check
+    let lapCount = state.lapCount;
+    let currentLapTime = state.currentLapTime + dt;
+    let bestLapTime = state.bestLapTime;
+    let lastLapTime = state.lastLapTime;
+
+    // Detect passing through start area
+    const startX = 400;
+    const startY = 180;
+    const distToStart = Math.hypot(newX - startX, newY - startY);
+
+    if (distToStart < 35 && currentLapTime > 4.0) {
+      if (!this.crossedStartGate) {
+        this.crossedStartGate = true;
+        lapCount++;
+        lastLapTime = currentLapTime;
+        if (!bestLapTime || currentLapTime < bestLapTime) {
+          bestLapTime = currentLapTime;
+        }
+        currentLapTime = 0;
+      }
+    } else if (distToStart > 60) {
+      this.crossedStartGate = false;
+    }
+
+    // Trajectory history (sampled every 3 frames)
+    let trail = state.trail;
+    if (Math.random() < 0.35) {
+      trail = [...trail.slice(-120), { x: newX, y: newY }];
+    }
 
     return {
       ...state,
       robotX: newX,
       robotY: newY,
       robotAngle: newAngle,
+      linearVelocity: linearVel,
+      angularVelocity: angularVel,
       leftMotorSpeed: leftSpeed,
       rightMotorSpeed: rightSpeed,
-      time: state.time + dt
+      time: state.time + dt,
+      lapCount,
+      currentLapTime,
+      bestLapTime,
+      lastLapTime,
+      offTrackCount,
+      onLinePercentage,
+      totalDistanceMeters: state.totalDistanceMeters + Math.abs(linearDistM),
+      trail,
     };
   }
 }
