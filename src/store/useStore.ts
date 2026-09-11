@@ -67,6 +67,9 @@ export type SimulationState = {
   // Telemetry Oscilloscope Buffer
   telemetryHistory: TelemetryPoint[];
   showOscilloscope: boolean;
+
+  // Physical Start / BOOT button state on robot
+  bootButtonPressed: boolean;
 };
 
 export interface HardwarePreset {
@@ -311,6 +314,9 @@ interface AppState {
   updateSimState: (newState: Partial<SimulationState>) => void;
   resetSim: (startX?: number, startY?: number, angle?: number) => void;
   toggleSim: () => void;
+  startSim: () => void;
+  pauseSim: () => void;
+  triggerBootButton: () => void;
   setTimeScale: (scale: number) => void;
   toggleOscilloscope: () => void;
 
@@ -392,6 +398,7 @@ export const useStore = create<AppState>((set, get) => ({
     trail: [],
     telemetryHistory: [],
     showOscilloscope: false,
+    bootButtonPressed: false,
   },
 
   updateSimState: (newState) =>
@@ -410,6 +417,7 @@ export const useStore = create<AppState>((set, get) => ({
       simState: {
         ...state.simState,
         isRunning: false,
+        bootButtonPressed: false,
         robotX: startX ?? defaultPos.x,
         robotY: startY ?? defaultPos.y,
         robotAngle: angle ?? defaultPos.angle,
@@ -429,6 +437,29 @@ export const useStore = create<AppState>((set, get) => ({
   toggleSim: () => set((state) => ({
     simState: { ...state.simState, isRunning: !state.simState.isRunning }
   })),
+
+  startSim: () => set((state) => ({
+    simState: { ...state.simState, isRunning: true }
+  })),
+
+  pauseSim: () => set((state) => ({
+    simState: { ...state.simState, isRunning: false }
+  })),
+
+  triggerBootButton: () => {
+    set((state) => ({
+      simState: {
+        ...state.simState,
+        bootButtonPressed: true,
+        isRunning: !state.simState.isRunning
+      }
+    }));
+    setTimeout(() => {
+      set((state) => ({
+        simState: { ...state.simState, bootButtonPressed: false }
+      }));
+    }, 250);
+  },
 
   getTheoreticalTopSpeed: () => {
     const { hardware } = get();

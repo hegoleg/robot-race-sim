@@ -167,7 +167,7 @@ export class RobotEngine {
     const sensorReadings = sensors0to1.map(v => Math.round(v * 1000));
 
     // 3. Execute Arduino loop()
-    const { leftSpeed, rightSpeed } = arduinoEnv.executeTick(sensors0to1, state.time, dt);
+    const { leftSpeed, rightSpeed } = arduinoEnv.executeTick(sensors0to1, state.time, dt, !!state.bootButtonPressed);
 
     // 4. Calculate error & line position for telemetry
     let weightedSum = 0;

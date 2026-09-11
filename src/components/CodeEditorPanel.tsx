@@ -1,14 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { useStore, CODE_TEMPLATES } from '../store/useStore';
 import { arduinoEnv } from '../engine/ArduinoTranspiler';
-import { Code2, Terminal, BookOpen, CheckCircle2, AlertCircle, FileCode, Download, Check } from 'lucide-react';
+import { sound } from '../utils/sound';
+import { Code2, Terminal, BookOpen, CheckCircle2, AlertCircle, FileCode, Download, Check, Play, Square } from 'lucide-react';
 
 export const CodeEditorPanel: React.FC = () => {
-  const { code, setCode, hardware } = useStore();
+  const { code, setCode, hardware, simState, toggleSim } = useStore();
   const [useMonaco, setUseMonaco] = useState(true);
   const [showDocs, setShowDocs] = useState(false);
   const [exported, setExported] = useState(false);
+
+  const handleToggleRun = () => {
+    if (!simState.isRunning) {
+      sound.playStart();
+    } else {
+      sound.playPause();
+    }
+    toggleSim();
+  };
+
+  // Keyboard shortcut Ctrl+Enter to compile & run code
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleToggleRun();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [simState.isRunning]);
 
   const compileError = arduinoEnv.getCompileError();
   const runtimeError = arduinoEnv.getRuntimeError();
@@ -104,13 +126,13 @@ export const CodeEditorPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Template Selector Bar */}
+      {/* Template Selector & Run Action Bar */}
       <div className="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex items-center gap-2 text-xs">
         <FileCode className="w-3.5 h-3.5 text-blue-400 shrink-0" />
         <span className="text-slate-400 text-[11px] shrink-0">Шаблон:</span>
         <select
           onChange={handleTemplateChange}
-          className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
+          className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer min-w-0"
           defaultValue=""
         >
           <option value="" disabled>Выберите готовый алгоритм...</option>
@@ -118,6 +140,21 @@ export const CodeEditorPanel: React.FC = () => {
             <option key={idx} value={t.name}>{t.name}</option>
           ))}
         </select>
+
+        {/* Quick Run / Pause button right above the editor */}
+        <button
+          onClick={handleToggleRun}
+          className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95 shrink-0 ${
+            simState.isRunning
+              ? 'bg-amber-600 hover:bg-amber-500 text-white ring-1 ring-amber-400'
+              : 'bg-emerald-600 hover:bg-emerald-500 text-white ring-1 ring-emerald-400'
+          }`}
+          title="Запустить робота с текущим кодом (Ctrl+Enter)"
+        >
+          {simState.isRunning ? <Square className="w-3.5 h-3.5 fill-white" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+          <span>{simState.isRunning ? 'Пауза' : 'Запуск'}</span>
+          <span className="text-[9px] opacity-75 font-mono hidden md:inline">Ctrl+↵</span>
+        </button>
       </div>
 
       {/* API Reference Dropdown Sheet */}

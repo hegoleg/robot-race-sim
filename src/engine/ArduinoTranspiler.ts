@@ -69,6 +69,9 @@ export class ArduinoEnvironment {
     // 7. Suffixes on numbers: 3500.0f -> 3500.0
     js = js.replace(/([0-9]+\.?[0-9]*)f\b/g, '$1');
 
+    // 8. Safeguard: Eliminate blocking busy-wait loops on buttons like while (digitalRead(...) == HIGH) delay(10);
+    js = js.replace(/while\s*\(\s*digitalRead\s*\([^)]*\)\s*==\s*(?:HIGH|LOW|1|0)\s*\)\s*(?:\{[^}]*\}|[^;]+;)/g, '/* [sim: non-blocking button wait] */');
+
     return js;
   }
 
@@ -135,7 +138,13 @@ export class ArduinoEnvironment {
         INPUT_PULLUP: 2,
         pinMode: () => {},
         digitalWrite: () => {},
-        digitalRead: () => 1,
+        digitalRead: (pin: number) => {
+          // Pin 0 is standard BOOT button on ESP32 / Arduino (Active LOW with pullup)
+          if (pin === 0 || pin === 34 || pin === 35) {
+            return this.isBootPressed ? 0 : 1;
+          }
+          return 1;
+        },
         analogRead: () => 512,
         
         // Motor output state (speed -255 .. +255)
@@ -200,12 +209,14 @@ export class ArduinoEnvironment {
 
   private envContext: any = null;
   private simTime: number = 0;
+  private isBootPressed: boolean = false;
 
   /**
    * Executes one iteration of the Arduino loop() with updated sensor values.
    */
-  public executeTick(sensors0to1: number[], timeSeconds: number, dt: number): ArduinoExecutionResult {
+  public executeTick(sensors0to1: number[], timeSeconds: number, dt: number, bootPressed: boolean = false): ArduinoExecutionResult {
     this.simTime = timeSeconds;
+    this.isBootPressed = bootPressed;
 
     if (!this.instance || !this.instance.loop) {
       return { leftSpeed: 0, rightSpeed: 0, logs: this.logs };
