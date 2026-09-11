@@ -45,9 +45,25 @@
 
 ## ✨ Key Features
 
+### 🔌 Smart Pinout & Code Architecture Analyzer
+* **Arbitrary Code Upload & Drag-and-Drop**: Drag any `.ino`, `.cpp`, or `.h` file directly onto the editor or use the **"Upload"** button.
+* **Automated Motor Driver Topology Detection**:
+  - **TB6612FNG**: recognition of `PWMA, AIN1, AIN2` and `PWMB, BIN1, BIN2, STBY`.
+  - **L298N / L293D**: recognition of `ENA, IN1, IN2` and `ENB, IN3, IN4`.
+  - **DRV8833 / MX1508**: dual-PWM differential motor control.
+  - **PWM + DIR**: discrete speed and direction pins.
+  - **ESP32 LEDC**: hardware PWM channels via `ledcWrite()`.
+  - **Custom Function Hooks**: automatic detection of `setMotors()`, `motors()`, `drive()`, `motorLeft()`, `motorRight()`.
+* **Sensor Pinout Auto-Mapping**:
+  - Detects pin arrays (`int sensorPins[] = {A0, A1, A2, A3, A4}`), individual `#define S1..S8`, or calls to `analogRead(A0..A15)` / `digitalRead()`.
+  - **One-Click Chassis Sync**: If uploaded code specifies 5 sensors while the simulator has 8, an instant `[⚡ Sync Chassis (5 sensors)]` button appears to synchronize hardware geometry!
+* **Full Pololu `QTRSensors` Emulation**:
+  - Built-in support for `QTRSensors` class, `qtr.readLineBlack()`, `qtr.readLineWhite()`, `qtr.calibrate()`, and `qtr.setSensorPins()`.
+
 ### 1. 💻 Authentic Arduino (C++) Code Execution
+* **Complete Virtual GPIO Table**: `digitalWrite()`, `analogWrite()`, `digitalRead()`, `analogRead()`, and `pinMode()` operate realistically on virtual hardware pins.
 * **1:1 syntax compatibility**: write native `setup()`, `loop()`, `pinMode()`, `analogRead()`, `millis()`, `constrain()`, `map()`, and `Serial.println()`.
-* **Motor control**: `setMotors(left, right)` or `setMotorA()`, `setMotorB()` from `-255` to `+255`.
+* **Motor control**: `setMotors(left, right)` or `setMotorA()`, `setMotorB()` from `-255` to `+255`, as well as direct hardware PWM.
 * **Pololu QTR sensor centroid algorithm**: `readLineBlack(sensorValues)` calculates the weighted line center between `0` and `(N-1)*1000`.
 * **State persistence across iterations**: global variables (`lastError`, `integral`, user timers) persist between `loop()` iterations just like on a real MCU (ESP32-S3, STM32, Arduino).
 

@@ -229,6 +229,164 @@ export const CODE_TEMPLATES = [
     code: DEFAULT_ARDUINO_CODE
   },
   {
+    name: '🔌 Аппаратный скетч: Arduino Uno + L298N (ШИМ и АЦП)',
+    code: `/* ============================================================
+ *  Робот на Arduino Uno + Драйвер L298N + 5 аналоговых датчиков
+ *  Симулятор автоматически определяет распиновку и ШИМ-управление!
+ * ============================================================
+ */
+
+// Распиновка моторов L298N
+#define ENA 5    // ШИМ левый мотор
+#define IN1 4    // Направление вперед (левый)
+#define IN2 3    // Направление назад (левый)
+
+#define ENB 6    // ШИМ правый мотор
+#define IN3 7    // Направление вперед (правый)
+#define IN4 8    // Направление назад (правый)
+
+// Распиновка аналоговых датчиков линии (5 шт)
+#define S1 A0
+#define S2 A1
+#define S3 A2
+#define S4 A3
+#define S5 A4
+
+// Кнопка запуска
+#define START_BTN 2
+
+// Параметры регулятора
+float Kp = 0.07;
+float Kd = 1.2;
+int baseSpeed = 190;
+int lastError = 0;
+
+void setup() {
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(START_BTN, INPUT_PULLUP);
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Считываем 5 аналоговых датчиков (0 - 1023)
+  int s[5];
+  s[0] = analogRead(S1);
+  s[1] = analogRead(S2);
+  s[2] = analogRead(S3);
+  s[3] = analogRead(S4);
+  s[4] = analogRead(S5);
+
+  // Вычисляем средневзвешенную ошибку
+  long weightedSum = 0;
+  long sum = 0;
+  for (int i = 0; i < 5; i++) {
+    weightedSum += (long)s[i] * (i * 1000);
+    sum += s[i];
+  }
+  
+  int error = 0;
+  if (sum > 0) {
+    int position = weightedSum / sum;
+    error = position - 2000; // Центр для 5 датчиков = 2000
+  }
+
+  int motorDiff = Kp * error + Kd * (error - lastError);
+  lastError = error;
+
+  int leftSpeed  = constrain(baseSpeed + motorDiff, -255, 255);
+  int rightSpeed = constrain(baseSpeed - motorDiff, -255, 255);
+
+  // Прямое аппаратное управление через драйвер L298N
+  if (leftSpeed >= 0) {
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    analogWrite(ENA, leftSpeed);
+  } else {
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+    analogWrite(ENA, -leftSpeed);
+  }
+
+  if (rightSpeed >= 0) {
+    digitalWrite(IN3, HIGH);
+    digitalWrite(IN4, LOW);
+    analogWrite(ENB, rightSpeed);
+  } else {
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, HIGH);
+    analogWrite(ENB, -rightSpeed);
+  }
+}
+`
+  },
+  {
+    name: '📡 Аппаратный скетч: TB6612FNG + библиотека QTRSensors',
+    code: `/* ============================================================
+ *  Робот на TB6612FNG + Библиотека Pololu QTR-8RC
+ * ============================================================
+ */
+#include <QTRSensors.h>
+
+// Распиновка драйвера TB6612FNG
+#define PWMA 5
+#define AIN1 4
+#define AIN2 3
+#define PWMB 6
+#define BIN1 7
+#define BIN2 8
+#define STBY 9
+
+QTRSensors qtr;
+const uint8_t SensorCount = 8;
+uint16_t sensorValues[SensorCount];
+
+float Kp = 0.085;
+float Kd = 1.35;
+int baseSpeed = 210;
+int lastError = 0;
+
+void setup() {
+  pinMode(STBY, OUTPUT);
+  digitalWrite(STBY, HIGH); // Включаем драйвер
+
+  qtr.setTypeRC();
+  qtr.setSensorPins((const uint8_t[]){2, 3, 4, 5, 6, 7, 8, 9}, SensorCount);
+
+  // Калибровка в симуляторе проходит мгновенно
+  for (uint16_t i = 0; i < 400; i++) {
+    qtr.calibrate();
+  }
+}
+
+void loop() {
+  // Библиотечный вызов Pololu QTRSensors
+  uint16_t position = qtr.readLineBlack(sensorValues);
+  int error = position - 3500;
+
+  int motorSpeed = Kp * error + Kd * (error - lastError);
+  lastError = error;
+
+  int left = constrain(baseSpeed + motorSpeed, 0, 255);
+  int right = constrain(baseSpeed - motorSpeed, 0, 255);
+
+  // Управление левым мотором (TB6612)
+  digitalWrite(AIN1, HIGH);
+  digitalWrite(AIN2, LOW);
+  analogWrite(PWMA, left);
+
+  // Управление правым мотором (TB6612)
+  digitalWrite(BIN1, HIGH);
+  digitalWrite(BIN2, LOW);
+  analogWrite(PWMB, right);
+}
+`
+  },
+  {
     name: '⚡ Пропорциональный P-регулятор (Быстрый старт)',
     code: `/* Простой и быстрый P-регулятор для подбора базовой скорости */
 float Kp = 0.06;
