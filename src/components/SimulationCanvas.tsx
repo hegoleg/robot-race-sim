@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { engine, PIXELS_PER_METER } from '../engine/RobotEngine';
 import { sound } from '../utils/sound';
-import { Play, Square, RotateCcw, Crosshair, Trophy, Activity, Gauge, Radio } from 'lucide-react';
+import { Play, Square, RotateCcw, Crosshair, Trophy, Activity, Gauge } from 'lucide-react';
 import { SensorBar } from './SensorBar';
 import { Oscilloscope } from './Oscilloscope';
 
@@ -21,7 +21,6 @@ export const SimulationCanvas: React.FC = () => {
     updateSimState,
     toggleSim,
     resetSim,
-    triggerBootButton,
     setTimeScale,
     toggleOscilloscope,
   } = useStore();
@@ -236,16 +235,6 @@ export const SimulationCanvas: React.FC = () => {
   const handleResetSim = () => {
     sound.playClick();
     resetSim();
-  };
-
-  const handleBootClick = () => {
-    sound.playClick();
-    if (!simState.isRunning) {
-      sound.playStart();
-    } else {
-      sound.playPause();
-    }
-    triggerBootButton();
   };
 
   // Sound effect on new lap record
@@ -484,46 +473,6 @@ export const SimulationCanvas: React.FC = () => {
           </div>
         )}
 
-        {/* Interactive Physical Robot Launch / BOOT Button Widget */}
-        <button
-          onClick={handleBootClick}
-          className={`absolute bottom-4 right-4 z-20 flex items-center gap-3 px-4 py-2.5 rounded-xl border font-mono shadow-2xl transition-all duration-150 active:scale-95 cursor-pointer backdrop-blur-md ${
-            simState.isRunning
-              ? 'bg-slate-900/90 border-amber-500/80 text-amber-300 shadow-amber-950/60 hover:bg-slate-900'
-              : 'bg-slate-900/90 border-emerald-500/80 text-emerald-300 shadow-emerald-950/60 hover:bg-slate-900 hover:border-emerald-400 ring-2 ring-emerald-500/30'
-          }`}
-          title="Физическая кнопка запуска робота BOOT (GPIO 0). Кликните для запуска или остановки заезда"
-        >
-          <div className="relative flex items-center justify-center shrink-0">
-            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shadow-inner transition-transform duration-100 ${
-              simState.bootButtonPressed 
-                ? 'scale-90 bg-amber-600 border-amber-300' 
-                : simState.isRunning
-                ? 'bg-amber-500/20 border-amber-400'
-                : 'bg-emerald-500/20 border-emerald-400 animate-pulse'
-            }`}>
-              <div className={`w-4 h-4 rounded-full transition-colors ${
-                simState.isRunning ? 'bg-amber-400 shadow-sm shadow-amber-400' : 'bg-emerald-400 shadow-sm shadow-emerald-400'
-              }`} />
-            </div>
-            {simState.isRunning && (
-              <span className="absolute w-8 h-8 rounded-full border-2 border-emerald-400 animate-ping pointer-events-none opacity-40" />
-            )}
-          </div>
-          
-          <div className="flex flex-col text-left">
-            <div className="flex items-center gap-1 text-[9px] text-slate-400 uppercase tracking-widest font-bold">
-              <Radio className="w-3 h-3 text-cyan-400" />
-              Кнопка робота (BOOT / GPIO 0)
-            </div>
-            <div className="text-xs font-black tracking-wide text-white flex items-center gap-2">
-              <span>{simState.isRunning ? 'ОСТАНОВИТЬ РОБОТА' : 'ЗАПУСТИТЬ РОБОТА'}</span>
-              <span className="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono">
-                Клик
-              </span>
-            </div>
-          </div>
-        </button>
       </div>
 
       {/* Real-time Optical Sensor Bar Monitor */}

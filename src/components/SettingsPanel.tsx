@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useStore, HARDWARE_PRESETS } from '../store/useStore';
-import { sound } from '../utils/sound';
-import { Settings, Sliders, BatteryCharging, Zap, Gauge, Layers, Info, Play, Square } from 'lucide-react';
+import { Settings, Sliders, BatteryCharging, Zap, Gauge, Layers, Info } from 'lucide-react';
 
 export const SettingsPanel: React.FC = () => {
   const {
@@ -10,9 +9,7 @@ export const SettingsPanel: React.FC = () => {
     applyPreset,
     trackSettings,
     updateTrackSettings,
-    getTheoreticalTopSpeed,
-    simState,
-    toggleSim,
+    getTheoreticalTopSpeed
   } = useStore();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -123,28 +120,11 @@ export const SettingsPanel: React.FC = () => {
 
   return (
     <div className="w-[340px] bg-white border-l border-slate-200 flex flex-col h-full text-xs shrink-0 select-none">
-      <div className="p-2.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+      <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
         <div className="flex items-center gap-2">
           <Settings className="w-4 h-4 text-blue-600" />
           <h2 className="font-bold text-slate-800 text-sm">Компоновка робота</h2>
         </div>
-
-        <button
-          onClick={() => {
-            if (!simState.isRunning) sound.playStart();
-            else sound.playPause();
-            toggleSim();
-          }}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold text-xs cursor-pointer shadow-xs transition active:scale-95 ${
-            simState.isRunning
-              ? 'bg-amber-600 hover:bg-amber-500 text-white'
-              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-          }`}
-          title="Запустить робота"
-        >
-          {simState.isRunning ? <Square className="w-3.5 h-3.5 fill-white" /> : <Play className="w-3.5 h-3.5 fill-white" />}
-          <span>{simState.isRunning ? 'Пауза' : 'Старт'}</span>
-        </button>
       </div>
       
       <div className="flex-1 overflow-y-auto p-3 space-y-4">

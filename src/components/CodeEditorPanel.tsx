@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react';
 import { useStore, CODE_TEMPLATES } from '../store/useStore';
 import { arduinoEnv } from '../engine/ArduinoTranspiler';
 import { sound } from '../utils/sound';
-import { Code2, Terminal, BookOpen, CheckCircle2, AlertCircle, FileCode, Download, Check, Play, Square } from 'lucide-react';
+import { Code2, Terminal, BookOpen, CheckCircle2, AlertCircle, FileCode, Download, Check } from 'lucide-react';
 
 export const CodeEditorPanel: React.FC = () => {
   const { code, setCode, hardware, simState, toggleSim } = useStore();
@@ -11,21 +11,17 @@ export const CodeEditorPanel: React.FC = () => {
   const [showDocs, setShowDocs] = useState(false);
   const [exported, setExported] = useState(false);
 
-  const handleToggleRun = () => {
-    if (!simState.isRunning) {
-      sound.playStart();
-    } else {
-      sound.playPause();
-    }
-    toggleSim();
-  };
-
-  // Keyboard shortcut Ctrl+Enter to compile & run code
+  // Keyboard shortcut Ctrl+Enter to toggle simulation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        handleToggleRun();
+        if (!simState.isRunning) {
+          sound.playStart();
+        } else {
+          sound.playPause();
+        }
+        toggleSim();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -140,21 +136,6 @@ export const CodeEditorPanel: React.FC = () => {
             <option key={idx} value={t.name}>{t.name}</option>
           ))}
         </select>
-
-        {/* Quick Run / Pause button right above the editor */}
-        <button
-          onClick={handleToggleRun}
-          className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95 shrink-0 ${
-            simState.isRunning
-              ? 'bg-amber-600 hover:bg-amber-500 text-white ring-1 ring-amber-400'
-              : 'bg-emerald-600 hover:bg-emerald-500 text-white ring-1 ring-emerald-400'
-          }`}
-          title="Запустить робота с текущим кодом (Ctrl+Enter)"
-        >
-          {simState.isRunning ? <Square className="w-3.5 h-3.5 fill-white" /> : <Play className="w-3.5 h-3.5 fill-white" />}
-          <span>{simState.isRunning ? 'Пауза' : 'Запуск'}</span>
-          <span className="text-[9px] opacity-75 font-mono hidden md:inline">Ctrl+↵</span>
-        </button>
       </div>
 
       {/* API Reference Dropdown Sheet */}
